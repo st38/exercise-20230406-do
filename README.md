@@ -45,23 +45,23 @@
  3. We run very basic network configuration with open internal communication
  4. We run single node Consul cluster with just basic settings
  5. We use AWS Auto Scaling Groups for easiest nodes creation and future checks
- 6. We elected nftables for firewall configuration as an successor of iptables and a default tool on Ubuntu
- 7. We elected [Consul Template](https://github.com/hashicorp/consul-template#faq) as a recomended solution for Consul Service Discovery template engine
+ 6. We elected nftables for firewall configuration as an successor of iptables and a default tool in Ubuntu
+ 7. We elected Consul Template as it is a [recomended solution for Consul Service Discovery template engine](https://github.com/hashicorp/consul-template#faq)
  8. We run basic shell script on all fleets nodes to check opened ports
 
  **This configuration will do the following**
  1. Create a common VPC
- 2. Create an IAM roles for all the instaces for [Cloud Auto-join](https://developer.hashicorp.com/consul/docs/install/cloud-auto-join)
+ 2. Create an IAM roles for all the instances for [Cloud Auto-join](https://developer.hashicorp.com/consul/docs/install/cloud-auto-join)
  3. Create Launch Templates with tags for Cloud Auto-join
  4. Create an Auto Scaling Group for Consul server with a singe node
- 5. Create an Auto Scaling Groups for all the fleets with the number of nodes specified in variables
- 6. Install Consul on the Consul server and Consul Template, nftables on the all fleets nodes via [Cloud-Init](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html)
+ 5. Create an Auto Scaling Groups for all the fleets with the number of nodes specified in the variables
+ 6. Install Consul on the Consul server and Consul Template, nftables on all fleets nodes via [Cloud-Init](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html)
 
  **After instances run, the following will occur**
  1. Consul server will form the cluster and start to serve the clients
- 2. Consul client on fleet nodes will join the cluster
- 4. Consul client on fleet nodes will register the service
- 5. Consul template will start to monitor a template file for nftables rules and will render it on Consul Service Catalog changes and new ruleset will be applied to the firewall
+ 2. Consul client on fleets nodes will join the cluster
+ 4. Consul client on fleets nodes will register the service
+ 5. Consul Template will start to monitor nftables rules template file and will render it on Consul Service Catalog changes and new ruleset will be applied to the firewall
   ```
   Start node
     --> Install Consul client
@@ -85,24 +85,6 @@
 
 
 ## [Deploy](#exercise)
-
-### [GitHub Actions](#deploy)
-
- 1. Fork the repository
-
- 2. Add GitHub Actions Secrets
-    | Secret name             | Secret value           | Description                   |
-    | ----------------------- | ---------------------- | ----------------------------- |
-    | `AWS_ACCESS_KEY_ID`     | `<access key>`         | IAM User for deployment       |
-    | `AWS_SECRET_ACCESS_KEY` | `<secret access key>`  | IAM User  for deployment      |
-    | `AWS_REGION`            | `<aws region>`         | Region where to run instances |
-    | `S3_BUCKET`             | `<s3 bucket>`          | S3 bucket for Terraform state |
-    | `S3_BUCKET_REGION`      | `<s3 bucket region>`   | S3 bucket region              |
-
- 3. Run [Deploy workflow](../../actions/workflows/deploy.yaml) to deploy resources
-
- 4. Run [Cleanup workflow](../../actions/workflows/cleanup.yaml) to cleanup resources
-
 
 ### [Manually](#deploy)
 
@@ -138,32 +120,52 @@
     ```
 
  After ~ 2 minutes nodes will finish configuration and we are ready to [check](#check) the results
+  <details>
+  <summary>Screenshot</summary>
+
+  ![alt AWS Console](aws-console.png "AWS Console")
+  </details>
+
+
+### [GitHub Actions](#deploy)
+
+ 1. Fork the repository
+
+ 2. Add GitHub Actions Secrets
+    | Secret name             | Secret value           | Description                   |
+    | ----------------------- | ---------------------- | ----------------------------- |
+    | `AWS_ACCESS_KEY_ID`     | `<access key>`         | IAM User for deployment       |
+    | `AWS_SECRET_ACCESS_KEY` | `<secret access key>`  | IAM User  for deployment      |
+    | `AWS_REGION`            | `<aws region>`         | Region where to run instances |
+    | `S3_BUCKET`             | `<s3 bucket>`          | S3 bucket for Terraform state |
+    | `S3_BUCKET_REGION`      | `<s3 bucket region>`   | S3 bucket region              |
+
+ 3. Run [Deploy workflow](../../actions/workflows/deploy.yaml) to deploy resources
+
+ 4. [Check](#check) the results
+
+ 5. Run [Cleanup workflow](../../actions/workflows/cleanup.yaml) to cleanup resources
 
 
 ## [Check](#exercise)
 
  1. Connect to one of the instances
 
-    We may consider to use [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html) and in case of the issue, we should use generated private key.
-
-    <details>
-    <summary>Screenshot</summary>
-
-    ![alt AWS Console](aws-console.png "AWS Console")
-    </details>
+    We may consider to use [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html) and in case of the issue, we should use generated private key
 
     <details>
     <summary>Connect using generated private key</summary>
 
     We generate a custom private key which is stored in Terraform state and if we would like to connect to the instance, we should get it from the state and use for the SSH connection
     ```bash
+    # Variables
     username="ubuntu"
     private_key="aws_private_key.pem"
     public_ip="<instance public ip>"
 
     # Get private key
     terraform output -raw private_key >"${private_key}"
-    chmod 400 "${private_key}"
+    chmod 600 "${private_key}"
 
     # Connect to the instance
     ssh  -i "${private_key}" "${username}"@"${public_ip}"
@@ -267,7 +269,7 @@
 
     **`Metrics --> ALL/9100`**
     ```bash
-    # From Metrics
+    # From Metrics - succeeded
     while read address; do
       nc -zv -w 1 $address 9100
     done <<< $(curl -sSf --get 'localhost:8500/v1/catalog/service/wireguard' --data-urlencode 'filter=NodeMeta.env matches ".*" and NodeMeta.stage matches ".*"' | jq -r '.[].Address')
@@ -297,25 +299,25 @@
 
     **`ALL --> Logs/5141`**
     ```bash
-    # From Metrics
+    # From Metrics - succeeded
     while read address; do
-      nc -zv -w 1 $address 9100
+      nc -zv -w 1 $address 5141
     done <<< $(curl -sSf --get 'localhost:8500/v1/catalog/service/wireguard' --data-urlencode 'filter=NodeMeta.env == "logs" and NodeMeta.stage matches ".*"' | jq -r '.[].Address')
     ```
     <details>
     <summary>result</summary>
 
     ```bash
-    Connection to 10.10.12.28 9100 port [tcp/*] succeeded!
-    Connection to 10.10.172.5 9100 port [tcp/*] succeeded!
-    Connection to 10.10.176.141 9100 port [tcp/*] succeeded!
-    Connection to 10.10.73.147 9100 port [tcp/*] succeeded!
+    Connection to 10.10.12.28 5141 port [tcp/*] succeeded!
+    Connection to 10.10.172.5 5141 port [tcp/*] succeeded!
+    Connection to 10.10.176.141 5141 port [tcp/*] succeeded!
+    Connection to 10.10.73.147 5141 port [tcp/*] succeeded!
     ```
     </details>
 
     **`Metrics --> App/9104`**
     ```bash
-    # From Metrics
+    # From Metrics - succeeded
     while read address; do
       nc -zv -w 1 $address 9104
     done <<< $(curl -sSf --get 'localhost:8500/v1/catalog/service/wireguard' --data-urlencode 'filter=NodeMeta.env == "app" and NodeMeta.stage matches ".*"' | jq -r '.[].Address')
@@ -333,7 +335,7 @@
 
     **`Backups --> App/3306`**
     ```bash
-    # From Backups
+    # From Backups - succeeded
     while read address; do
       nc -zv -w 1 $address 3306
     done <<< $(curl -sSf --get 'localhost:8500/v1/catalog/service/wireguard' --data-urlencode 'filter=NodeMeta.env == "app" and NodeMeta.stage matches ".*"' | jq -r '.[].Address')
@@ -351,7 +353,7 @@
 
     **`Metrics -x- App/3306`**
     ```bash
-    # From Metrics - Fail
+    # From Metrics - timed out
     while read address; do
       nc -zv -w 1 $address 3306
     done <<< $(curl -sSf --get 'localhost:8500/v1/catalog/service/wireguard' --data-urlencode 'filter=NodeMeta.env == "app" and NodeMeta.stage matches ".*"' | jq -r '.[].Address')
