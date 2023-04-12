@@ -1,0 +1,55 @@
+name: Cleanup
+
+
+on:
+  workflow_dispatch:
+
+
+env:
+  TERRAFORM_DIR: aws
+  TERRAFORM_VERSION: 1.4.4
+
+
+jobs:
+  # Cleanup
+  cleanup:
+    name: Cleanup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Terraform - v${{ env.TERRAFORM_VERSION }}
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform - Format
+        run: terraform fmt -check -diff -recursive
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Terraform - Init
+        run: |
+          mv backend.tf_ backend.tf
+          rm -f variables.auto.tfvars
+          terraform init -backend-config="bucket=${{ env.BUCKET }}" -backend-config="key=${{ env.KEY }}" -backend-config="region=${{ env.REGION }}"
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        env:
+          BUCKET: ${{ secrets.S3_BUCKET }}
+          KEY: terraform.tfstate
+          REGION: ${{ secrets.S3_BUCKET_REGION }}
+
+      - name: Terraform - Validate
+        run: terraform validate -no-color
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Terraform - Destroy
+        run: terraform destroy -auto-approve
+        working-directory: ${{ env.TERRAFORM_DIR }}

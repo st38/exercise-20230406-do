@@ -1,0 +1,113 @@
+name: Deploy
+
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: Resources name
+        required: true
+        default: consul
+      prefix:
+        description: Resources prefix
+        required: true
+        default: demo
+      cidr_block:
+        description: The IPv4 CIDR block for the VPC
+        required: true
+        default: 10.10.0.0/16
+      az_number:
+        description: Number of availability zones
+        required: true
+        type: number
+        default: 3
+      datacenter:
+        description: Fleet datacenter
+        required: true
+        default: eu-dc1
+      instance_architecture:
+        description: Instance architecture
+        required: true
+        default: x86_64
+        type: choice
+        options:
+        - x86_64
+        - arm64
+      instance_type:
+        description: Instance type
+        required: true
+        default: t3a.nano
+        type: choice
+        options:
+        - t3a.nano
+        - t3a.micro
+        - t4g.nano
+        - t4g.micro
+      desired_capacity:
+        description: Number of Amazon EC2 instances
+        required: true
+        type: number
+        default: 1
+
+
+env:
+  TERRAFORM_DIR: aws
+  TERRAFORM_VERSION: 1.4.4
+
+
+jobs:
+  # Deploy
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_name: ${{ github.event.inputs.name }}
+      TF_VAR_prefix: ${{ github.event.inputs.prefix }}
+      TF_VAR_cidr_block: ${{ github.event.inputs.cidr_block }}
+      TF_VAR_az_number: ${{ github.event.inputs.az_number }}
+      TF_VAR_datacenter: ${{ github.event.inputs.datacenter }}
+      TF_VAR_instance_architecture: ${{ github.event.inputs.instance_architecture }}
+      TF_VAR_instance_type: ${{ github.event.inputs.instance_type }}
+      TF_VAR_desired_capacity: ${{ github.event.inputs.desired_capacity }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Terraform - v${{ env.TERRAFORM_VERSION }}
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform - Format
+        run: terraform fmt -check -diff -recursive
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Terraform - Init
+        run: |
+          mv backend.tf_ backend.tf
+          rm -f variables.auto.tfvars
+          terraform init -backend-config="bucket=${{ env.BUCKET }}" -backend-config="key=${{ env.KEY }}" -backend-config="region=${{ env.REGION }}"
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        env:
+          BUCKET: ${{ secrets.S3_BUCKET }}
+          KEY: terraform.tfstate
+          REGION: ${{ secrets.S3_BUCKET_REGION }}
+
+      - name: Terraform - Validate
+        run: terraform validate -no-color
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Terraform - Plan
+        run: terraform plan -no-color -input=false -out tfplan.out
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      - name: Terraform - Apply
+        run: terraform apply -auto-approve tfplan.out
+        working-directory: ${{ env.TERRAFORM_DIR }}

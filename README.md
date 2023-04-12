@@ -80,10 +80,31 @@
       * `AmazonVPCFullAccess`
       * `IAMFullAccess`
       * `AmazonEC2FullAccess`
+      * `AmazonS3FullAccess` [`(GitHub Action deploy)`](#github-actions)
  3. Enough [Amazon EC2 service quotas](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-resource-limits.html) to run required numbers of instances
 
 
 ## [Deploy](#exercise)
+
+### [GitHub Actions](#deploy)
+
+ 1. Fork the repository
+
+ 2. Add GitHub Actions Secrets
+    | Secret name             | Secret value           | Description                   |
+    | ----------------------- | ---------------------- | ----------------------------- |
+    | `AWS_ACCESS_KEY_ID`     | `<access key>`         | IAM User for deployment       |
+    | `AWS_SECRET_ACCESS_KEY` | `<secret access key>`  | IAM User  for deployment      |
+    | `AWS_REGION`            | `<aws region>`         | Region where to run instances |
+    | `S3_BUCKET`             | `<s3 bucket>`          | S3 bucket for Terraform state |
+    | `S3_BUCKET_REGION`      | `<s3 bucket region>`   | S3 bucket region              |
+
+ 3. Run [Deploy workflow](../../actions/workflows/deploy.yaml) to deploy resources
+
+ 4. Run [Cleanup workflow](../../actions/workflows/cleanup.yaml) to cleanup resources
+
+
+### [Manually](#deploy)
 
  1. Get the code
     ```bash
